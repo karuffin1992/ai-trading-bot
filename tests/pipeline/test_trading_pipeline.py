@@ -61,3 +61,37 @@ def test_kill_skips_execution(mocker):
     p.risk.evaluate.return_value = MagicMock(spec=RiskDecision, outcome="KILL")
     p.run_assessment()
     p.executor.execute.assert_not_called()
+
+def _wire_features(mocker):
+    feats = MagicMock(spec=FeatureSet, vix=18.0)
+    feats.model_dump_json.return_value = "{}"
+    mocker.patch("app.pipeline.trading_pipeline.FeaturePipeline.compute",
+                 return_value=feats)
+
+def test_ai_no_trade_vetoes(mocker):
+    p = stub_pipeline()
+    wire_happy(p)
+    _wire_features(mocker)
+    p.analyst.analyze.return_value = MagicMock(spec=AIAnalysis, decision="NO_TRADE",
+        ai_confidence=0.9, failed=False)
+    p.run_assessment()
+    p.risk.evaluate.assert_not_called()
+    p.executor.execute.assert_not_called()
+
+def test_ai_low_confidence_vetoes(mocker):
+    p = stub_pipeline()
+    wire_happy(p)
+    _wire_features(mocker)
+    p.analyst.analyze.return_value = MagicMock(spec=AIAnalysis, decision="APPROVE",
+        ai_confidence=0.5, failed=False)
+    p.run_assessment()
+    p.risk.evaluate.assert_not_called()
+    p.executor.execute.assert_not_called()
+
+def test_balance_passed_to_executor(mocker):
+    p = stub_pipeline()
+    wire_happy(p)
+    _wire_features(mocker)
+    mocker.patch.object(p, "_account_balance", return_value=250.0)
+    p.run_assessment()
+    assert p.executor.execute.call_args.kwargs["account_balance"] == 250.0

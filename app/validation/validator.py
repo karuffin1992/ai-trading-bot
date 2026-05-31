@@ -10,6 +10,8 @@ class TradeValidator:
     def validate(self, signal: TradeSignal) -> ValidationResult:
         if self._trading_mode == "dry_run":
             return ValidationResult(outcome="FAIL", reason="dry_run mode — no execution")
+        if self._trading_mode == "live_auto":
+            return ValidationResult(outcome="FAIL", reason="live_auto unsupported in P1")
 
         spread = self._get_spread(signal.symbol)
         if spread > settings.max_spread_pct:
@@ -17,8 +19,10 @@ class TradeValidator:
                                     reason=f"spread {spread:.4%} > max {settings.max_spread_pct:.4%}")
 
         power = self._get_buying_power()
-        if power < 10.0:
-            return ValidationResult(outcome="FAIL", reason=f"buying power ${power:.2f} insufficient")
+        if power < settings.min_balance_threshold:
+            return ValidationResult(outcome="FAIL",
+                                    reason=f"buying power ${power:.2f} below floor "
+                                           f"${settings.min_balance_threshold:.2f}")
 
         if self._has_open_position(signal.symbol):
             return ValidationResult(outcome="FAIL", reason=f"open position in {signal.symbol}")

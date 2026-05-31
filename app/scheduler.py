@@ -26,8 +26,26 @@ def _assessment_job():
     ctx = TradingPipeline().run_assessment()
     logger.info("Cycle done: %s errors=%s", ctx.cycle_id, ctx.errors)
 
+def _monitor_job():
+    from app.execution.position_manager import PositionManager
+    from app.persistence.db import make_session_factory
+    PositionManager(make_session_factory()).sync()
+    logger.info("Position monitor sync complete")
+
+def _close_positions_job():
+    from app.execution.position_manager import PositionManager
+    from app.persistence.db import make_session_factory
+    PositionManager(make_session_factory()).close_all()
+    logger.info("EOD positions flattened")
+
 def _report_job():
-    logger.info("Daily report job complete")
+    from app.persistence.db import make_session_factory
+    from app.persistence.summary import compute_daily_summary
+    sf = make_session_factory()
+    with sf() as s:
+        summary = compute_daily_summary(s)
+    logger.info("Daily report: pnl=%.2f trades=%d drawdown=%.2f%%",
+                summary.total_pnl, summary.trade_count, summary.drawdown_pct * 100)
 
 def create_scheduler() -> BackgroundScheduler:
     s = BackgroundScheduler(timezone="America/New_York")
@@ -35,6 +53,10 @@ def create_scheduler() -> BackgroundScheduler:
                    EVENT_JOB_ERROR)
     s.add_job(_guard(_assessment_job), "cron", hour=9, minute=45,
               id="assessment", **_DEFAULTS)
+    s.add_job(_guard(_monitor_job), "interval", minutes=5,
+              id="position_monitor", **_DEFAULTS)
+    s.add_job(_guard(_close_positions_job), "cron", hour=15, minute=55,
+              id="close_positions", **_DEFAULTS)
     s.add_job(_guard(_report_job), "cron", hour=16, minute=10,
               id="daily_report", **_DEFAULTS)
     return s

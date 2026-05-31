@@ -1,14 +1,18 @@
-import time
+import time, logging
 from uuid import uuid4, UUID
-from datetime import datetime
 from app.models.signals import TradeSignal
 from app.models.execution import OrderResult, FillRecord
+from app.execution.position_manager import PositionManager
 from app.config import settings
+from app.util.clock import now_utc
+
+logger = logging.getLogger(__name__)
 
 class ExecutionEngine:
     def __init__(self, session_factory=None):
         self._sf = session_factory
         self._trading_mode = settings.trading_mode
+        self._positions = PositionManager(session_factory)
         from alpaca.trading.client import TradingClient
         self._trading_client = TradingClient(
             settings.alpaca_api_key, settings.alpaca_secret_key, paper=True)
@@ -25,20 +29,33 @@ class ExecutionEngine:
 
         try:
             order = self._submit_bracket(signal, qty)
-        except Exception:
-            return None
+        except Exception as e:
+            logger.warning("Bracket submit failed (%s); falling back to market+stop", e)
+            order = self._submit_market_fallback(signal, qty)
+            if order is None:
+                return None
 
         result = OrderResult(
             execution_id=execution_id, trade_id=signal.trade_id,
             broker_order_id=str(order.id), symbol=signal.symbol,
             qty=qty, side="buy", position_side=signal.position_side,
-            submitted_at=datetime.utcnow(), execution_fingerprint=fingerprint,
+            submitted_at=now_utc(), execution_fingerprint=fingerprint,
         )
 
         fill = self._poll_fill(str(order.id), signal.entry_price)
-        result.broker_state = fill.broker_state if fill else "stale"
+        if fill:
+            result.broker_state = fill.broker_state
+        else:
+            result.broker_state = self._reconcile(str(order.id))
 
         self._persist_execution(result, fill, signal)
+
+        if result.broker_state in ("filled", "partial_fill"):
+            fill_price = fill.fill_price if fill else signal.entry_price
+            self._positions.record_open(
+                signal.trade_id, signal.symbol, signal.position_side, qty,
+                fill_price, signal.stop_loss, signal.take_profit)
+
         return result
 
     def _submit_bracket(self, signal: TradeSignal, qty: float):
@@ -51,6 +68,35 @@ class ExecutionEngine:
             stop_loss=StopLossRequest(stop_price=round(signal.stop_loss, 2)),
         ))
 
+    # Bracket unavailable: place the market entry, then attach a stop-loss after
+    # fill. If the stop-loss cannot be placed, flatten the position immediately —
+    # an unprotected position is worse than a missed trade.
+    def _submit_market_fallback(self, signal: TradeSignal, qty: float):
+        from alpaca.trading.requests import MarketOrderRequest, StopLossRequest, StopOrderRequest
+        from alpaca.trading.enums import OrderSide, TimeInForce
+        try:
+            order = self._trading_client.submit_order(MarketOrderRequest(
+                symbol=signal.symbol, qty=qty, side=OrderSide.BUY,
+                time_in_force=TimeInForce.DAY))
+        except Exception as e:
+            logger.error("Market fallback entry failed: %s", e)
+            return None
+
+        self._poll_fill(str(order.id), signal.entry_price)
+        try:
+            self._trading_client.submit_order(StopOrderRequest(
+                symbol=signal.symbol, qty=qty, side=OrderSide.SELL,
+                time_in_force=TimeInForce.DAY,
+                stop_price=round(signal.stop_loss, 2)))
+        except Exception as e:
+            logger.critical("Stop-loss placement failed for %s; flattening: %s", signal.symbol, e)
+            try:
+                self._trading_client.close_position(signal.symbol)
+            except Exception as ce:
+                logger.critical("Emergency flatten failed for %s: %s", signal.symbol, ce)
+            return None
+        return order
+
     def _poll_fill(self, order_id: str, entry_price: float) -> FillRecord | None:
         deadline = time.time() + settings.fill_poll_timeout_seconds
         while time.time() < deadline:
@@ -59,12 +105,24 @@ class ExecutionEngine:
                 if o.status.value == "filled":
                     fp = float(o.filled_avg_price or entry_price)
                     return FillRecord(execution_id=uuid4(), fill_price=fp,
-                                      fill_time=datetime.utcnow(),
+                                      fill_time=now_utc(),
                                       slippage=fp - entry_price, broker_state="filled")
             except Exception:
                 pass
             time.sleep(2)
         return None
+
+    # Poll timed out: ask the broker for the order's terminal state instead of
+    # blindly marking it stale, so the DB reflects reality.
+    def _reconcile(self, order_id: str) -> str:
+        try:
+            o = self._trading_client.get_order_by_id(order_id)
+            status = o.status.value
+            if status in ("filled", "partial_fill", "canceled"):
+                return "reconciled"
+        except Exception as e:
+            logger.warning("Reconcile failed for %s: %s", order_id, e)
+        return "stale"
 
     def _is_already_executed(self, trade_id: UUID) -> bool:
         if not self._sf: return False

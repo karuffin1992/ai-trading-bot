@@ -28,6 +28,7 @@ def stub_engine(balance=100.0, daily_trades=0, drawdown=0.0,
     e._get_kill_switch        = lambda: KillSwitchState(active=kill)
     e._get_last_trade_time    = lambda: last_trade
     e._is_earnings_proximity  = lambda sym: False
+    e._has_open_position      = lambda sym: False
     e._activate_kill_switch   = lambda r: None
     return e
 
@@ -58,3 +59,22 @@ def test_low_risk_score_blocks():
 def test_risk_score_in_result():
     r = stub_engine().evaluate(make_signal(), make_analysis(), vix=18.0)
     assert 0.0 <= r.risk_score <= 1.0
+
+def test_missing_stop_loss_blocks():
+    sig = TradeSignal(trade_id=uuid4(), symbol="SPY", strategy="spy_trend_following",
+                      direction="long", strategy_confidence=0.74, entry_price=521.0,
+                      stop_loss=0.0, take_profit=527.3)
+    r = stub_engine().evaluate(sig, make_analysis(), vix=18.0)
+    assert r.outcome == "BLOCKED" and "Stop loss" in r.reason
+
+def test_stop_above_entry_blocks_long():
+    sig = TradeSignal(trade_id=uuid4(), symbol="SPY", strategy="spy_trend_following",
+                      direction="long", strategy_confidence=0.74, entry_price=521.0,
+                      stop_loss=525.0, take_profit=527.3)
+    assert stub_engine().evaluate(sig, make_analysis(), vix=18.0).outcome == "BLOCKED"
+
+def test_open_position_blocks():
+    e = stub_engine()
+    e._has_open_position = lambda sym: True
+    r = e.evaluate(make_signal(), make_analysis(), vix=18.0)
+    assert r.outcome == "BLOCKED" and "Open position" in r.reason

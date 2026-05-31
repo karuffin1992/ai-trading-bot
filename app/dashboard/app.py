@@ -53,7 +53,13 @@ if settings.trading_mode == "live_manual":
                         else: st.error(r.json().get("detail"))
                     except Exception as e:
                         st.error(str(e))
-                c.button("❌ Reject", key=f"re_{pt['id']}")
+                if c.button("❌ Reject", key=f"re_{pt['id']}"):
+                    try:
+                        r = httpx.post(f"http://localhost:8000/reject/{pt['id']}", timeout=10)
+                        if r.status_code == 200: st.rerun()
+                        else: st.error(r.json().get("detail"))
+                    except Exception as e:
+                        st.error(str(e))
 
 # Latest cycle
 cycle = _q1("SELECT * FROM cycles ORDER BY started_at DESC LIMIT 1")
@@ -62,7 +68,13 @@ if cycle:
     sig  = cycle.get("signal_json") or {}
     ai   = cycle.get("ai_analysis_json") or {}
     risk = cycle.get("risk_json") or {}
-    st.markdown(f"**Signal:** {sig.get('type','N/A')} | conf: {sig.get('strategy_confidence',0):.2f}")
+    if sig.get("type") == "SIGNAL":
+        sig_label = f"{sig.get('direction','').upper()} @ ${sig.get('entry_price',0):.2f}"
+    elif sig.get("type") == "REJECTION":
+        sig_label = f"NO TRADE — {', '.join(sig.get('reasons', []))}"
+    else:
+        sig_label = "N/A"
+    st.markdown(f"**Signal:** {sig_label} | conf: {sig.get('strategy_confidence',0):.2f}")
     st.markdown(f"**AI:** {ai.get('decision','N/A')} | ai_conf: {ai.get('ai_confidence',0):.2f} | {ai.get('regime','N/A')}")
     with st.expander("AI Reasoning"):
         st.write(ai.get("reasoning", "None"))

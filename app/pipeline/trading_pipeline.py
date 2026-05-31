@@ -13,6 +13,9 @@ from app.config import settings
 
 class TradingPipeline:
     def __init__(self, session_factory=None):
+        if session_factory is None:
+            from app.persistence.db import make_session_factory
+            session_factory = make_session_factory()
         self.fetcher   = make_fetcher()
         self.strategy  = SpyTrendStrategy()
         self.analyst   = AIAnalyst()
@@ -40,9 +43,19 @@ class TradingPipeline:
 
         ctx.signal = self.strategy.evaluate(ctx.features)
 
-        ctx.ai_analysis = self.analyst.analyze(ctx.signal, ctx.features)
+        balance = self._account_balance()
+
+        ctx.ai_analysis = self.analyst.analyze(ctx.signal, ctx.features,
+                                               account_balance=balance)
         if ctx.ai_analysis.failed:
             ctx.errors.append("AI analysis failed")
+            self.logger.write_cycle(ctx); self.logger.write_report(ctx)
+            return ctx
+
+        # AI is an annotator/veto, never an override: a REJECT/NO_TRADE or
+        # sub-threshold confidence stops the trade even if the strategy fired.
+        if (ctx.ai_analysis.decision in ("REJECT", "NO_TRADE") or
+                ctx.ai_analysis.ai_confidence < settings.ai_confidence_threshold):
             self.logger.write_cycle(ctx); self.logger.write_report(ctx)
             return ctx
 
@@ -61,11 +74,20 @@ class TradingPipeline:
                  ctx.features.model_dump_json() +
                  ctx.ai_analysis.model_dump_json()).encode()
             ).hexdigest()
-            ctx.order = self.executor.execute(ctx.signal, account_balance=100.0, fingerprint=fp)
+            ctx.order = self.executor.execute(ctx.signal, account_balance=balance, fingerprint=fp)
 
         self.logger.write_cycle(ctx)
         self.logger.write_report(ctx)
         return ctx
+
+    def _account_balance(self) -> float:
+        try:
+            from alpaca.trading.client import TradingClient
+            cash = TradingClient(settings.alpaca_api_key, settings.alpaca_secret_key,
+                                 paper=True).get_account().cash
+            return float(cash)
+        except Exception:
+            return settings.starting_capital
 
 def _dummy_signal() -> TradeSignal:
     from uuid import uuid4

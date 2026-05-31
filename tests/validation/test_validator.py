@@ -37,6 +37,10 @@ def test_fail_low_buying_power():
 def test_fail_open_position():
     assert stub(open_pos=True).validate(make_signal()).outcome == "FAIL"
 
+def test_live_auto_blocked():
+    r = stub(mode="live_auto").validate(make_signal())
+    assert r.outcome == "FAIL" and "live_auto" in r.reason
+
 def test_live_manual_writes_pending():
     wrote = []
     v = stub(mode="live_manual")

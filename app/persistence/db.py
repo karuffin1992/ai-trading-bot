@@ -95,6 +95,21 @@ def make_engine(url: str | None = None):
     from sqlalchemy import create_engine
     return create_engine(url or settings.database_url)
 
+def init_db(engine=None) -> None:
+    import os
+    os.makedirs("data", exist_ok=True)
+    os.makedirs("reports", exist_ok=True)
+    engine = engine or make_engine()
+    Base.metadata.create_all(engine)
+    with get_session(engine) as s:
+        if not s.get(KillSwitchRecord, 1):
+            s.add(KillSwitchRecord(id=1, active=False, reason=""))
+            s.commit()
+
+def make_session_factory(engine=None):
+    engine = engine or make_engine()
+    return lambda: get_session(engine)
+
 @contextmanager
 def get_session(engine=None):
     if engine is None:

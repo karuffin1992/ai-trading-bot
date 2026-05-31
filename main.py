@@ -9,7 +9,10 @@ app = FastAPI(title="AI Trading Bot", version="0.1.0")
 _scheduler = create_scheduler()
 
 @app.on_event("startup")
-def startup(): _scheduler.start()
+def startup():
+    from app.persistence.db import init_db
+    init_db()
+    _scheduler.start()
 
 @app.on_event("shutdown")
 def shutdown(): _scheduler.shutdown()
@@ -23,6 +26,20 @@ def approve_trade(trade_id: UUID):
     if data is None:
         raise HTTPException(404, "Pending trade not found")
     return _execute_approved_trade(trade_id, data)
+
+@app.post("/reject/{trade_id}")
+def reject_trade(trade_id: UUID):
+    from app.persistence.db import PendingTradeRecord, make_engine, get_session
+    from datetime import datetime
+    with get_session(make_engine()) as s:
+        rec = s.query(PendingTradeRecord).filter_by(
+            id=str(trade_id), status="PENDING_APPROVAL").first()
+        if rec is None:
+            raise HTTPException(404, "Pending trade not found")
+        rec.status = "REJECTED"
+        rec.updated_at = datetime.utcnow()
+        s.commit()
+    return {"status": "rejected", "trade_id": str(trade_id)}
 
 def _get_pending_trade(trade_id: UUID) -> dict | None:
     from app.persistence.db import PendingTradeRecord, make_engine, get_session
