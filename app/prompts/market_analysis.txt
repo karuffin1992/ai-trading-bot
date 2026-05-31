@@ -1,0 +1,21 @@
+TRADING MODE: {trading_mode}
+ACCOUNT BALANCE: ${account_balance:.2f} (paper)
+
+MARKET DATA:
+{feature_set_json}
+
+STRATEGY SIGNAL:
+{trade_signal_json}
+
+TASK:
+1. Determine market regime
+2. Evaluate signal quality
+3. Identify risk factors
+4. Set ai_confidence (0.0-1.0)
+5. Output decision: APPROVE, REJECT, REDUCE_CONFIDENCE, or NO_TRADE
+
+Rules reminder:
+- If ai_confidence < 0.70 → NO_TRADE
+- If signal type = REJECTION → REJECT immediately
+
+Return only the JSON object described in your system prompt.

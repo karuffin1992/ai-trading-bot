@@ -1,0 +1,30 @@
+trading:
+  mode: dry_run
+  symbol: SPY
+capital:
+  starting: 100.0
+  min_balance: 10.0
+  max_position_pct: 0.20
+risk:
+  max_daily_trades: 1
+  max_spread_pct: 0.0005
+  risk_score_threshold: 0.65
+  ai_confidence_threshold: 0.70
+  max_drawdown_pct: 0.10
+  consecutive_loss_limit: 3
+  cooldown_minutes: 30
+  earnings_proximity_days: 3
+  fill_poll_timeout_seconds: 30
+strategy:
+  vix_max: 25.0
+  rsi_max_long: 70.0
+  relative_volume_min: 1.2
+  atr_stop_multiplier: 2.0
+  atr_target_multiplier: 3.0
+versions:
+  pipeline: "1.0.0"
+  strategy: "1.0.0"
+  prompt: "1.0.0"
+dashboard:
+  refresh_seconds: 60
+  page_size: 50
