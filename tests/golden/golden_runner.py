@@ -109,3 +109,61 @@ def list_cases() -> list[str]:
     if not os.path.isdir(CASES_DIR):
         return []
     return sorted(n for n in os.listdir(CASES_DIR) if n.endswith(".json"))
+
+
+def print_explain(case: dict, result: dict, expected: dict | None) -> None:
+    snaps = result["_snapshots"]
+    stages = [
+        ("FEATURES", "features_hash", snaps["features"]),
+        ("SIGNAL", "signal_hash", snaps["signal"]),
+        ("PROMPT", "prompt_hash", snaps["prompt"]),
+    ]
+    print(f"=== {case['case_metadata'].get('description', '')} ===")
+    for title, hkey, snap in stages:
+        print(f"\n--- {title} ---")
+        if snap is None:
+            print("(no output for this stage)")
+        elif title == "PROMPT":
+            print(canonicalize(snap))  # canonical (string) form = exactly what is hashed
+        else:
+            print(canonicalize(snap))
+        print(f"{hkey} = {result[hkey]}")
+        if expected is not None and expected.get(hkey) != result[hkey]:
+            print(f"  MISMATCH {hkey}: expected {expected.get(hkey)} got {result[hkey]}")
+    print("\n--- timing ---")
+    print(json.dumps(result["timing"]))
+
+
+def _main(argv=None) -> int:
+    import argparse
+    p = argparse.ArgumentParser(description="Golden replay runner")
+    p.add_argument("--update", action="store_true", help="regenerate expected files")
+    p.add_argument("--explain", metavar="CASE", help="print canonical snapshots + hashes")
+    p.add_argument("cases", nargs="*", help="case filenames (default: all)")
+    args = p.parse_args(argv)
+
+    if args.explain:
+        case = load_case(args.explain)
+        result = run_case(case)
+        try:
+            expected = load_expected(args.explain)
+        except FileNotFoundError:
+            expected = None
+        print_explain(case, result, expected)
+        return 0
+
+    targets = args.cases or list_cases()
+    for name in targets:
+        result = run_case(load_case(name))
+        if args.update:
+            write_expected(name, expected_payload(result))
+            print(f"blessed {name}")
+        else:
+            print(f"{name}: features={result['features_hash'][:12]} "
+                  f"signal={result['signal_hash'][:12]} "
+                  f"prompt={(result['prompt_hash'] or 'null')[:12]}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())
