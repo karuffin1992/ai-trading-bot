@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Literal
 import yaml, os
 
@@ -47,8 +47,7 @@ class Settings(BaseSettings):
     llm_replay_cache_enabled: bool = True
     reflection_enabled: bool = False
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=".env")
 
 def _apply_yaml(path: str = "config/settings.yaml") -> None:
     if not os.path.exists(path):

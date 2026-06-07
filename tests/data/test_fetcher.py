@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime
+from app.util.clock import now_utc
 from app.data.fetcher import DataFetcher
 from app.models.market import MarketData
 
@@ -9,7 +9,7 @@ def fetcher():
                        finnhub_api_key="test")
 
 def _stub_bars(n=25):
-    return [{"t": datetime.utcnow(), "o": 520.0, "h": 522.0,
+    return [{"t": now_utc(), "o": 520.0, "h": 522.0,
              "l": 519.0, "c": 521.0, "v": 1_000_000.0}] * n
 
 def test_fetch_returns_market_data(fetcher, mocker):

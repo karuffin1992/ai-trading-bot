@@ -1,15 +1,16 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.util.clock import now_utc
 from app.features.pipeline import FeaturePipeline
 from app.models.market import MarketData, FeatureSet
 
 def make_market_data(n=30):
-    bars = [{"t": datetime.utcnow() - timedelta(days=n-i),
+    bars = [{"t": now_utc() - timedelta(days=n-i),
              "o": 520.0+i*0.1, "h": 521.0+i*0.1, "l": 519.0+i*0.1,
              "c": 520.5+i*0.1, "v": 1_000_000+i*10_000}
             for i in range(n)]
     return MarketData(
-        symbol="SPY", timestamp=datetime.utcnow(), pipeline_version="1.0.0",
+        symbol="SPY", timestamp=now_utc(), pipeline_version="1.0.0",
         open=bars[-1]["o"], high=bars[-1]["h"], low=bars[-1]["l"],
         close=bars[-1]["c"], volume=bars[-1]["v"], bars_daily=bars,
         bid=521.0, ask=521.1, spread_proxy=0.0001, vix=18.5, news_sentiment=0.1,

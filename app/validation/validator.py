@@ -64,12 +64,12 @@ class TradeValidator:
     def _write_pending(self, signal: TradeSignal) -> None:
         if not self._sf: return
         from app.persistence.db import PendingTradeRecord
-        from datetime import datetime
+        from app.util.clock import now_utc
         with self._sf() as s:
             s.add(PendingTradeRecord(
                 id=str(signal.trade_id), cycle_id="",
                 signal_json=signal.model_dump(mode="json"),
                 status="PENDING_APPROVAL",
-                created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+                created_at=now_utc(), updated_at=now_utc(),
             ))
             s.commit()

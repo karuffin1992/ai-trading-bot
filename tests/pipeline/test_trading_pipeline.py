@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
-from datetime import datetime
 from uuid import uuid4
+from app.util.clock import now_utc
 from app.pipeline.trading_pipeline import TradingPipeline
 from app.pipeline.context import PipelineContext
 from app.models.market import MarketData, FeatureSet
@@ -22,7 +22,7 @@ def stub_pipeline():
 
 def wire_happy(p):
     p.fetcher.fetch.return_value = MagicMock(spec=MarketData, vix=18.0, symbol="SPY",
-        timestamp=datetime.utcnow(), pipeline_version="1.0.0",
+        timestamp=now_utc(), pipeline_version="1.0.0",
         open=520.0, high=522.0, low=519.0, close=521.0, volume=1e6,
         bid=521.0, ask=521.1, spread_proxy=0.0001, news_sentiment=0.1, bars_daily=[])
     p.strategy.evaluate.return_value = MagicMock(spec=TradeSignal, type="SIGNAL",

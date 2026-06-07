@@ -1,8 +1,8 @@
 import json
 from unittest.mock import MagicMock
-from datetime import datetime
 from uuid import uuid4
 
+from app.util.clock import now_utc
 from app.ai import analyst as analyst_mod
 from app.ai.analyst import AIAnalyst
 from app.models.ai import AIAnalysis
@@ -11,7 +11,7 @@ from app.models.signals import TradeSignal
 
 
 def make_fs():
-    return FeatureSet(symbol="SPY", timeframe="1D", timestamp=datetime.utcnow(),
+    return FeatureSet(symbol="SPY", timeframe="1D", timestamp=now_utc(),
                       feature_version="1.0.0", price=521.0, vwap=519.0,
                       ema_9=521.5, ema_20=519.0, ema_50=515.0, rsi=55.0,
                       macd=0.5, macd_signal=0.3, macd_hist=0.2, atr=2.1,

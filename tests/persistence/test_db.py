@@ -33,12 +33,12 @@ def test_kill_switch_singleton(engine):
 
 def test_pending_trade_status(engine):
     from uuid import uuid4
-    from datetime import datetime
+    from app.util.clock import now_utc
     with get_session(engine) as s:
         s.add(PendingTradeRecord(
             id=str(uuid4()), cycle_id=str(uuid4()),
             signal_json={}, status="PENDING_APPROVAL",
-            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+            created_at=now_utc(), updated_at=now_utc(),
         ))
         s.commit()
         rec = s.query(PendingTradeRecord).first()

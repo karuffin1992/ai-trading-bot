@@ -1,9 +1,10 @@
 import os
-from datetime import datetime, date
+from datetime import date
 from app.pipeline.context import PipelineContext
 from app.persistence.db import CycleRecord
 from app.models.signals import TradeSignal, TradeRejection
 from app.config import settings
+from app.util.clock import now_utc
 
 REPORTS_DIR = "reports"
 
@@ -16,7 +17,7 @@ class PipelineLogger:
         rec = CycleRecord(
             cycle_id=str(ctx.cycle_id),
             started_at=ctx.started_at,
-            completed_at=datetime.utcnow(),
+            completed_at=now_utc(),
             trading_mode=ctx.trading_mode,
             pipeline_version=settings.pipeline_version,
             strategy_version=settings.strategy_version,

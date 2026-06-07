@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from uuid import UUID
 from app.scheduler import create_scheduler
@@ -5,17 +6,17 @@ from app.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="AI Trading Bot", version="0.1.0")
 _scheduler = create_scheduler()
 
-@app.on_event("startup")
-def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     from app.persistence.db import init_db
     init_db()
     _scheduler.start()
+    yield
+    _scheduler.shutdown()
 
-@app.on_event("shutdown")
-def shutdown(): _scheduler.shutdown()
+app = FastAPI(title="AI Trading Bot", version="0.1.0", lifespan=lifespan)
 
 @app.get("/health")
 def health(): return {"status": "ok", "mode": settings.trading_mode}
@@ -30,14 +31,14 @@ def approve_trade(trade_id: UUID):
 @app.post("/reject/{trade_id}")
 def reject_trade(trade_id: UUID):
     from app.persistence.db import PendingTradeRecord, make_engine, get_session
-    from datetime import datetime
+    from app.util.clock import now_utc
     with get_session(make_engine()) as s:
         rec = s.query(PendingTradeRecord).filter_by(
             id=str(trade_id), status="PENDING_APPROVAL").first()
         if rec is None:
             raise HTTPException(404, "Pending trade not found")
         rec.status = "REJECTED"
-        rec.updated_at = datetime.utcnow()
+        rec.updated_at = now_utc()
         s.commit()
     return {"status": "rejected", "trade_id": str(trade_id)}
 
@@ -55,7 +56,7 @@ def _execute_approved_trade(trade_id: UUID, signal_data: dict) -> dict:
     from app.validation.validator import TradeValidator
     from app.execution.executor import ExecutionEngine
     from app.persistence.db import PendingTradeRecord, make_engine, get_session
-    from datetime import datetime
+    from app.util.clock import now_utc
 
     signal = TradeSignal(**signal_data)
     dummy = AIAnalysis(decision="APPROVE", ai_confidence=0.80, regime="bullish",
@@ -78,6 +79,6 @@ def _execute_approved_trade(trade_id: UUID, signal_data: dict) -> dict:
         rec = s.query(PendingTradeRecord).filter_by(id=str(trade_id)).first()
         if rec:
             rec.status = "EXECUTED" if order else "FAILED"
-            rec.updated_at = datetime.utcnow()
+            rec.updated_at = now_utc()
             s.commit()
     return {"status": "executed" if order else "failed", "trade_id": str(trade_id)}

@@ -1,6 +1,7 @@
 import pytest
-from datetime import datetime, date
+from datetime import date
 from uuid import uuid4
+from app.util.clock import now_utc
 from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -26,7 +27,7 @@ def logger():
 def make_ctx():
     ctx = PipelineContext()
     ctx.market_data = MarketData(
-        symbol="SPY", timestamp=datetime.utcnow(), pipeline_version="1.0.0",
+        symbol="SPY", timestamp=now_utc(), pipeline_version="1.0.0",
         open=520.0, high=522.0, low=519.0, close=521.0, volume=1e6,
         bid=521.0, ask=521.1, spread_proxy=0.0001, vix=18.5, news_sentiment=0.1)
     ctx.signal = TradeRejection(symbol="SPY", strategy="spy_trend_following",

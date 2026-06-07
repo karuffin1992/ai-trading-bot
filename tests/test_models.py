@@ -1,5 +1,5 @@
 from uuid import uuid4
-from datetime import datetime
+from app.util.clock import now_utc
 from app.models.market import MarketData, FeatureSet
 from app.models.signals import TradeSignal, TradeRejection
 from app.models.ai import AIAnalysis
@@ -9,7 +9,7 @@ from app.pipeline.context import PipelineContext
 
 def test_feature_set_has_version():
     fs = FeatureSet(
-        symbol="SPY", timeframe="1D", timestamp=datetime.utcnow(),
+        symbol="SPY", timeframe="1D", timestamp=now_utc(),
         feature_version="1.0.0", price=521.0, vwap=520.0,
         ema_9=521.5, ema_20=519.0, ema_50=515.0,
         rsi=55.0, macd=0.5, macd_signal=0.3, macd_hist=0.2,

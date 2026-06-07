@@ -1,6 +1,6 @@
 import pytest
 from uuid import uuid4
-from datetime import datetime
+from app.util.clock import now_utc
 from unittest.mock import MagicMock
 from app.execution.executor import ExecutionEngine
 from app.models.signals import TradeSignal
@@ -31,7 +31,7 @@ def test_dry_run_returns_none():
 def test_paper_auto_submits(mocker):
     e = stub_engine()
     fill = FillRecord(execution_id=uuid4(), fill_price=521.05,
-                      fill_time=datetime.utcnow(), slippage=0.05, broker_state="filled")
+                      fill_time=now_utc(), slippage=0.05, broker_state="filled")
     mocker.patch.object(e, "_poll_fill", return_value=fill)
     result = e.execute(make_signal(), account_balance=100.0)
     e._trading_client.submit_order.assert_called_once()
@@ -63,7 +63,7 @@ def test_reconcile_on_timeout(mocker):
 def test_records_open_on_fill(mocker):
     e = stub_engine()
     fill = FillRecord(execution_id=uuid4(), fill_price=521.05,
-                      fill_time=datetime.utcnow(), slippage=0.05, broker_state="filled")
+                      fill_time=now_utc(), slippage=0.05, broker_state="filled")
     mocker.patch.object(e, "_poll_fill", return_value=fill)
     e.execute(make_signal(), account_balance=100.0)
     e._positions.record_open.assert_called_once()
@@ -74,7 +74,7 @@ def test_bracket_fallback_to_market(mocker):
     fallback_order = MagicMock(); fallback_order.id = "fb-1"
     mocker.patch.object(e, "_submit_market_fallback", return_value=fallback_order)
     fill = FillRecord(execution_id=uuid4(), fill_price=521.0,
-                      fill_time=datetime.utcnow(), slippage=0.0, broker_state="filled")
+                      fill_time=now_utc(), slippage=0.0, broker_state="filled")
     mocker.patch.object(e, "_poll_fill", return_value=fill)
     result = e.execute(make_signal(), account_balance=100.0)
     assert result is not None and result.broker_order_id == "fb-1"

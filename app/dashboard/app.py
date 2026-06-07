@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import date
 from sqlalchemy import create_engine, text
 from app.config import settings
+from app.util.clock import now_utc
 import httpx
 
 st.set_page_config(page_title="AI Trading Bot", layout="wide")
@@ -28,7 +29,7 @@ c1,c2,c3,c4 = st.columns(4)
 c1.metric("Mode",   settings.trading_mode.upper())
 c2.metric("P&L",    f"${summary.get('total_pnl', 0.0):.2f}")
 c3.metric("Kill",   "🔴 ON" if ks.get("active") else "🟢 OFF")
-c4.markdown(f"**Updated:** {datetime.utcnow().strftime('%H:%M:%S UTC')}")
+c4.markdown(f"**Updated:** {now_utc().strftime('%H:%M:%S UTC')}")
 st.divider()
 
 # Pending approval (live_manual only)

@@ -1,11 +1,11 @@
 import pytest
-from datetime import datetime
+from app.util.clock import now_utc
 from app.strategies.spy_trend import SpyTrendStrategy
 from app.models.market import FeatureSet
 from app.models.signals import TradeSignal, TradeRejection
 
 def make_fs(**ov):
-    d = dict(symbol="SPY", timeframe="1D", timestamp=datetime.utcnow(),
+    d = dict(symbol="SPY", timeframe="1D", timestamp=now_utc(),
              feature_version="1.0.0", price=521.0, vwap=519.0,
              ema_9=521.5, ema_20=519.0, ema_50=515.0,
              rsi=55.0, macd=0.5, macd_signal=0.3, macd_hist=0.2,

@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from app.models.market import MarketData
 from app.config import settings
+from app.util.clock import now_utc
 
 class DataFetcher:
     def __init__(self, alpaca_api_key: str, alpaca_secret_key: str, finnhub_api_key: str):
@@ -18,7 +19,7 @@ class DataFetcher:
         spread_proxy = (ask - bid) / mid if mid > 0 else 0.0
         latest = bars[-1] if bars else {}
         return MarketData(
-            symbol=symbol, timestamp=datetime.utcnow(),
+            symbol=symbol, timestamp=now_utc(),
             pipeline_version=settings.pipeline_version,
             open=latest.get("o", 0.0), high=latest.get("h", 0.0),
             low=latest.get("l", 0.0), close=latest.get("c", 0.0),
@@ -32,8 +33,8 @@ class DataFetcher:
         from alpaca.data.timeframe import TimeFrame
         req = StockBarsRequest(
             symbol_or_symbols=symbol, timeframe=TimeFrame.Day,
-            start=datetime.utcnow() - timedelta(days=30),
-            end=datetime.utcnow(),
+            start=now_utc() - timedelta(days=30),
+            end=now_utc(),
         )
         bars = self._data_client.get_stock_bars(req)
         df = bars.df
@@ -60,7 +61,7 @@ class DataFetcher:
 
     def _fetch_news_sentiment(self, symbol: str) -> float:
         try:
-            today = datetime.utcnow().strftime("%Y-%m-%d")
+            today = now_utc().strftime("%Y-%m-%d")
             news = self._finnhub.company_news(symbol, _from=today, to=today)
             scores = [n["sentiment"]["score"] for n in (news or [])[:10]
                       if "sentiment" in n]

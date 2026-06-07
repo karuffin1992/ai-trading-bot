@@ -7,11 +7,12 @@ from app.models.signals import TradeSignal, TradeRejection
 from app.models.ai import AIAnalysis
 from app.models.risk import RiskDecision, ValidationResult
 from app.models.execution import OrderResult
+from app.util.clock import now_utc
 
 @dataclass
 class PipelineContext:
     cycle_id: UUID = field(default_factory=uuid4)
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=now_utc)
     trading_mode: str = "dry_run"
     market_data: Optional[MarketData] = None
     features: Optional[FeatureSet] = None
