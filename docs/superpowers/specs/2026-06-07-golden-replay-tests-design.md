@@ -131,6 +131,20 @@ the same Pydantic model the live pipeline uses.
 The same `canonicalize` feeds both the hash and the `--explain` snapshots, so what you inspect
 is exactly what gets hashed.
 
+## Volatile-field normalization
+
+`TradeSignal.trade_id` is `Field(default_factory=uuid4)` — a fresh random UUID every run. It is
+serialized into `signal_hash` AND embedded in the prompt via `trade_signal_json`, so left alone
+it makes both hashes non-deterministic. Before hashing/prompt-building, the runner replaces it
+with a fixed sentinel:
+
+```python
+signal = signal.model_copy(update={"trade_id": UUID(int=0)})
+```
+
+The normalized signal is used for `signal_hash`, for `build_prompt_context`, and for the
+prompt. This is a runner-only concern — production `analyze()` keeps the real `trade_id`.
+
 ## Runner
 
 `golden_runner.py` exposes:
