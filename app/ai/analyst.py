@@ -36,19 +36,8 @@ class AIAnalyst:
             )
 
         system = _load("system_prompt.txt")
-        user = _load("market_analysis.txt").format(
-            trading_mode=settings.trading_mode,
-            account_balance=account_balance,
-            feature_set_json=features.model_dump_json(indent=2),
-            trade_signal_json=signal.model_dump_json(indent=2),
-        )
-        # Memory augmentation is opt-in. When disabled the prompt is byte-identical
-        # to the legacy prompt, so existing behavior/tests are unaffected. The
-        # block is concatenated in code (NOT a .format token) to keep the call
-        # above stable.
-        memory_block = self._memory_block(signal, features)
-        if memory_block:
-            user = f"{user}\n\nRELEVANT PAST EPISODES:\n{memory_block}"
+        ctx = self.build_prompt_context(signal, features, account_balance)
+        user = self.build_prompt(ctx)
         try:
             raw = self._call_model(system, user)
             data = json.loads(raw)
@@ -71,6 +60,31 @@ class AIAnalyst:
                 model_version=settings.model_version, prompt_version=settings.prompt_version,
                 failed=True,
             )
+
+    # Pure context assembly for the prompt — no client, no network. Used by
+    # analyze() and by the golden replay runner.
+    def build_prompt_context(self, signal: TradeSignal, features: FeatureSet,
+                             account_balance: float = 100.0) -> dict:
+        return {
+            "trading_mode": settings.trading_mode,
+            "account_balance": account_balance,
+            "feature_set_json": features.model_dump_json(indent=2),
+            "trade_signal_json": signal.model_dump_json(indent=2),
+            "memory_block": self._memory_block(signal, features),
+        }
+
+    # Formats the template from a context dict. Memory block concatenated under
+    # its header only when present, so the disabled path is byte-identical to legacy.
+    def build_prompt(self, ctx: dict) -> str:
+        user = _load("market_analysis.txt").format(
+            trading_mode=ctx["trading_mode"],
+            account_balance=ctx["account_balance"],
+            feature_set_json=ctx["feature_set_json"],
+            trade_signal_json=ctx["trade_signal_json"],
+        )
+        if ctx.get("memory_block"):
+            user = f"{user}\n\nRELEVANT PAST EPISODES:\n{ctx['memory_block']}"
+        return user
 
     # Routes through the LLM gateway when one is injected (provider-agnostic,
     # replay-cached); otherwise uses the direct Anthropic client (legacy path,
