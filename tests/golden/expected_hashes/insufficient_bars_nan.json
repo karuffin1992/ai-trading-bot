@@ -1,0 +1,17 @@
+{
+  "features_hash": "edf661b99c2457360076cb039335089f0e51850e19df960482a188f0d80c4b1e",
+  "prompt_hash": "27d8f40ea31f160a41b41238ab85c0737e04343b6136b1d81134c55698d558a1",
+  "prompt_preview": "TRADING MODE: dry_run ACCOUNT BALANCE: $100.00 (paper) MARKET DATA: { \"symbol\": \"SPY\", \"timeframe\": \"1D\", \"timestamp\": \"2026-06-01T00:00:00\", \"feature_version\": \"1.0.0\", \"price\": 100.25, \"vwap\": 99.7449685534591, \"ema_9\": null, \"ema_20\": null, \"ema_50\": null, \"rsi\": null, \"macd\": null,...",
+  "retrieval_hash": null,
+  "signal_hash": "bc1ac767bca9e252cfe20dbbb1b22175ed87e57d483167188125f6719c4bbfb7",
+  "timing": {
+    "features_runtime_ms": 1.852,
+    "strategy_runtime_ms": 0.041
+  },
+  "versions": {
+    "canonical_schema_version": "1.0.0",
+    "pipeline": "1.0.0",
+    "prompt": "1.0.0",
+    "strategy": "1.0.0"
+  }
+}

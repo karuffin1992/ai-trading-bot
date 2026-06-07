@@ -1,0 +1,65 @@
+{
+  "case_metadata": {
+    "created_at": "2026-06-07T00:00:00",
+    "description": "insufficient bars -> NaN indicators",
+    "expected_behavior": "FeatureSet/signal carry NaN; verifies NaN canonicalization",
+    "source": "synthetic"
+  },
+  "market_data": {
+    "ask": null,
+    "bars_daily": [
+      {
+        "c": 99.25,
+        "h": 99.75,
+        "l": 98.65,
+        "o": 99.05,
+        "t": "2026-01-01",
+        "v": 1000000.0
+      },
+      {
+        "c": 99.5,
+        "h": 100.0,
+        "l": 98.9,
+        "o": 99.3,
+        "t": "2026-01-02",
+        "v": 1000000.0
+      },
+      {
+        "c": 99.75,
+        "h": 100.25,
+        "l": 99.15,
+        "o": 99.55,
+        "t": "2026-01-03",
+        "v": 1000000.0
+      },
+      {
+        "c": 100.0,
+        "h": 100.5,
+        "l": 99.4,
+        "o": 99.8,
+        "t": "2026-01-04",
+        "v": 1000000.0
+      },
+      {
+        "c": 100.25,
+        "h": 100.75,
+        "l": 99.65,
+        "o": 100.05,
+        "t": "2026-01-05",
+        "v": 1300000.0
+      }
+    ],
+    "bid": null,
+    "close": 100.25,
+    "high": 100.75,
+    "low": 99.65,
+    "news_sentiment": 0.1,
+    "open": 100.05,
+    "pipeline_version": "1.0.0",
+    "spread_proxy": 0.0001,
+    "symbol": "SPY",
+    "timestamp": "2026-06-01T00:00:00",
+    "vix": 15.0,
+    "volume": 1300000.0
+  }
+}

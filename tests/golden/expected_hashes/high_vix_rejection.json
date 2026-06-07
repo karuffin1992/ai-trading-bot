@@ -1,0 +1,17 @@
+{
+  "features_hash": "18aafdb3392996dd0b18705f74131491803f2dc8cc6c1ee4e989056b7bcbaf71",
+  "prompt_hash": null,
+  "prompt_preview": null,
+  "retrieval_hash": null,
+  "signal_hash": "bd63d1387aa45cc56c28bf65e69d49bff8f3983c9006b960768122d3e88dadff",
+  "timing": {
+    "features_runtime_ms": 6.851,
+    "strategy_runtime_ms": 0.024
+  },
+  "versions": {
+    "canonical_schema_version": "1.0.0",
+    "pipeline": "1.0.0",
+    "prompt": "1.0.0",
+    "strategy": "1.0.0"
+  }
+}
