@@ -12,8 +12,17 @@ def _load(name: str) -> str:
         return f.read()
 
 class AIAnalyst:
-    def __init__(self):
+    # Class-level defaults so instances built via AIAnalyst.__new__(...) in tests
+    # (which skip __init__) still resolve these attributes.
+    _gateway = None
+    _retriever = None
+    _summarizer = None
+
+    def __init__(self, gateway=None, retriever=None, summarizer=None):
         self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._gateway = gateway
+        self._retriever = retriever
+        self._summarizer = summarizer
 
     def analyze(self, signal: TradeSignal | TradeRejection,
                 features: FeatureSet, account_balance: float = 100.0) -> AIAnalysis:
@@ -33,12 +42,15 @@ class AIAnalyst:
             feature_set_json=features.model_dump_json(indent=2),
             trade_signal_json=signal.model_dump_json(indent=2),
         )
+        # Memory augmentation is opt-in. When disabled the prompt is byte-identical
+        # to the legacy prompt, so existing behavior/tests are unaffected. The
+        # block is concatenated in code (NOT a .format token) to keep the call
+        # above stable.
+        memory_block = self._memory_block(signal, features)
+        if memory_block:
+            user = f"{user}\n\nRELEVANT PAST EPISODES:\n{memory_block}"
         try:
-            resp = self._client.messages.create(
-                model=settings.model_version, max_tokens=1024,
-                system=system, messages=[{"role": "user", "content": user}],
-            )
-            raw = resp.content[0].text
+            raw = self._call_model(system, user)
             data = json.loads(raw)
             return AIAnalysis(
                 decision=data["decision"],
@@ -59,3 +71,49 @@ class AIAnalyst:
                 model_version=settings.model_version, prompt_version=settings.prompt_version,
                 failed=True,
             )
+
+    # Routes through the LLM gateway when one is injected (provider-agnostic,
+    # replay-cached); otherwise uses the direct Anthropic client (legacy path,
+    # preserves the self._client test seam).
+    def _call_model(self, system: str, user: str) -> str:
+        if self._gateway is not None:
+            from app.llm.schemas import LLMMessage, LLMRequest
+            req = LLMRequest(
+                provider=settings.llm_provider, model=settings.model_version,
+                system=system, messages=[LLMMessage(role="user", content=user)],
+                max_tokens=1024, prompt_version=settings.prompt_version,
+            )
+            resp = self._gateway.generate(req)
+            if resp.failed:
+                raise RuntimeError(resp.error or "gateway inference failed")
+            return resp.text
+        out = self._client.messages.create(
+            model=settings.model_version, max_tokens=1024,
+            system=system, messages=[{"role": "user", "content": user}],
+        )
+        return out.content[0].text
+
+    # Builds the injected memory text. Returns "" unless injection is enabled and a
+    # retriever is wired — so the disabled path adds nothing to the prompt.
+    def _memory_block(self, signal: TradeSignal, features: FeatureSet) -> str:
+        if not settings.memory_injection_enabled or self._retriever is None:
+            return ""
+        query = (f"{features.symbol} regime price={features.price} "
+                 f"rsi={features.rsi} vix={features.vix} "
+                 f"{signal.direction} {signal.strategy}")
+        hits = self._retriever.retrieve(query, k=settings.memory_retrieval_k)
+        if not hits:
+            return ""
+        if self._summarizer is not None:
+            return self._summarizer.summarize_episodes(
+                hits, settings.memory_token_budget)
+        # Fallback rendering when no summarizer is injected.
+        char_budget = settings.memory_token_budget * 4
+        lines, used = [], 0
+        for i, rm in enumerate(hits, start=1):
+            line = f"{i}. {rm.outcome or 'NO_TRADE'} | {rm.summary}"
+            if used + len(line) + 1 > char_budget:
+                break
+            lines.append(line)
+            used += len(line) + 1
+        return "\n".join(lines)

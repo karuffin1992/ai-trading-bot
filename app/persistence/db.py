@@ -91,6 +91,126 @@ class KillSwitchRecord(Base):
     activated_at = Column(DateTime)
     reset_at = Column(DateTime)
 
+# ---------------------------------------------------------------------------
+# Self-learning / memory layer tables. Created automatically by
+# Base.metadata.create_all (no Alembic). All rows are versioned for
+# reproducibility; the learning_runs / parameter_sets / experiment_history
+# tables are written by the deferred harness+learning layer but defined here now
+# so the schema contract is locked.
+# ---------------------------------------------------------------------------
+
+class MemoryEpisodeRecord(Base):
+    __tablename__ = "memory_episodes"
+    episode_id = Column(String, primary_key=True)
+    kind = Column(String)
+    symbol = Column(String)
+    cycle_id = Column(String)
+    trade_id = Column(String)
+    summary = Column(String)
+    payload_json = Column(JSON)
+    outcome = Column(String)
+    pnl_pct = Column(Float)
+    holding_time_minutes = Column(Integer)
+    regime = Column(String)
+    tags_json = Column(JSON)
+    reflection = Column(String)
+    embedding_id = Column(String)
+    feature_version = Column(String)
+    strategy_version = Column(String)
+    prompt_version = Column(String)
+    model_version = Column(String)
+    created_at = Column(DateTime)
+
+class MemoryReflectionRecord(Base):
+    __tablename__ = "memory_reflections"
+    reflection_id = Column(String, primary_key=True)
+    trade_id = Column(String)
+    symbol = Column(String)
+    direction = Column(String)
+    entry_price = Column(Float)
+    exit_price = Column(Float)
+    pnl = Column(Float)
+    outcome = Column(String)
+    regime = Column(String)
+    summary = Column(String)
+    strengths_json = Column(JSON)
+    weaknesses_json = Column(JSON)
+    regime_notes_json = Column(JSON)
+    execution_notes_json = Column(JSON)
+    tags_json = Column(JSON)
+    feature_snapshot_json = Column(JSON)
+    feature_version = Column(String)
+    strategy_version = Column(String)
+    prompt_version = Column(String)
+    model_version = Column(String)
+    created_at = Column(DateTime)
+
+class EmbeddingRegistryRecord(Base):
+    __tablename__ = "embedding_registry"
+    embedding_id = Column(String, primary_key=True)
+    episode_id = Column(String)
+    provider = Column(String, default="deterministic_hash")
+    dim = Column(Integer)
+    vector_json = Column(JSON)
+    content_hash = Column(String)
+    embedding_version = Column(String)
+    created_at = Column(DateTime)
+
+class PromptVersionRecord(Base):
+    __tablename__ = "prompt_versions"
+    prompt_version = Column(String, primary_key=True)
+    name = Column(String)
+    content = Column(String)
+    content_hash = Column(String)
+    notes = Column(String)
+    created_at = Column(DateTime)
+
+class ModelRegistryRecord(Base):
+    __tablename__ = "model_registry"
+    model_version = Column(String, primary_key=True)
+    provider = Column(String)
+    display_name = Column(String)
+    params_json = Column(JSON)
+    notes = Column(String)
+    created_at = Column(DateTime)
+
+class LearningRunRecord(Base):
+    __tablename__ = "learning_runs"
+    run_id = Column(String, primary_key=True)
+    run_type = Column(String)
+    status = Column(String, default="running")
+    config_json = Column(JSON)
+    metrics_json = Column(JSON)
+    dataset_fingerprint = Column(String)
+    feature_version = Column(String)
+    strategy_version = Column(String)
+    prompt_version = Column(String)
+    model_version = Column(String)
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+
+class ParameterSetRecord(Base):
+    __tablename__ = "parameter_sets"
+    param_set_id = Column(String, primary_key=True)
+    run_id = Column(String)
+    status = Column(String, default="candidate")
+    params_json = Column(JSON)
+    score = Column(Float)
+    metrics_json = Column(JSON)
+    base_param_set_id = Column(String)
+    created_at = Column(DateTime)
+
+class ExperimentHistoryRecord(Base):
+    __tablename__ = "experiment_history"
+    experiment_id = Column(String, primary_key=True)
+    run_id = Column(String)
+    variant = Column(String)
+    param_set_id = Column(String)
+    dataset_fingerprint = Column(String)
+    metrics_json = Column(JSON)
+    passed_safety = Column(Boolean, default=False)
+    created_at = Column(DateTime)
+
 def make_engine(url: str | None = None):
     from sqlalchemy import create_engine
     return create_engine(url or settings.database_url)

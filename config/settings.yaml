@@ -25,6 +25,22 @@ versions:
   pipeline: "1.0.0"
   strategy: "1.0.0"
   prompt: "1.0.0"
+  model: "claude-sonnet-4-6"
 dashboard:
   refresh_seconds: 60
   page_size: 50
+# Self-learning / memory layer — all disabled by default. Flip enabled flags to
+# opt in; the deterministic_hash embedder keeps retrieval replay-safe.
+memory:
+  enabled: false
+  injection_enabled: false
+  retrieval_k: 5
+  token_budget: 800
+  embedding_provider: deterministic_hash
+  embedding_dim: 256
+  embedding_version: det-1.0.0
+llm:
+  provider: claude
+  replay_cache_enabled: true
+reflection:
+  enabled: false

@@ -8,9 +8,10 @@ from app.persistence.summary import compute_daily_summary
 # TP/SL fills) and EOD close_all() to flatten. Every close recomputes the daily
 # summary so the RiskEngine sees fresh drawdown / loss state.
 class PositionManager:
-    def __init__(self, session_factory=None):
+    def __init__(self, session_factory=None, reflection_engine=None):
         self._sf = session_factory
         self._client = None
+        self._reflect = reflection_engine
 
     def _broker(self):
         if self._client is None:
@@ -38,6 +39,7 @@ class PositionManager:
             return
         from app.persistence.db import PositionRecord
         open_at_broker = self._broker_open_map()
+        newly_closed: list[dict] = []
         with self._sf() as s:
             rows = s.query(PositionRecord).filter_by(status="open").all()
             changed = False
@@ -50,14 +52,18 @@ class PositionManager:
                     r.status = "closed"
                     r.closed_at = now_utc()
                     changed = True
+                    newly_closed.append(_snapshot(r))
             s.commit()
             if changed:
                 compute_daily_summary(s)
+        if newly_closed and self._reflect:
+            self._reflect.reflect_on_closed(newly_closed)
 
     def close_all(self) -> None:
         if not self._sf:
             return
         from app.persistence.db import PositionRecord
+        newly_closed: list[dict] = []
         with self._sf() as s:
             rows = s.query(PositionRecord).filter_by(status="open").all()
             for r in rows:
@@ -65,8 +71,11 @@ class PositionManager:
                 r.pnl = self._pnl(r.direction, r.entry_price, exit_price, r.qty)
                 r.status = "closed"
                 r.closed_at = now_utc()
+                newly_closed.append(_snapshot(r, exit_price=exit_price))
             s.commit()
             compute_daily_summary(s)
+        if newly_closed and self._reflect:
+            self._reflect.reflect_on_closed(newly_closed)
 
     def _broker_open_map(self) -> dict:
         try:
@@ -102,3 +111,19 @@ class PositionManager:
     def _pnl(direction: str, entry: float, exit_price: float, qty: float) -> float:
         sign = 1.0 if direction in ("long", "buy") else -1.0
         return round(sign * (exit_price - entry) * qty, 4)
+
+
+# Detaches the fields the reflection engine needs from an ORM row so reflection
+# can run after the session closes without touching detached instances.
+def _snapshot(r, exit_price=None) -> dict:
+    return {
+        "trade_id": r.trade_id,
+        "symbol": r.symbol,
+        "direction": r.direction,
+        "qty": r.qty,
+        "entry_price": r.entry_price,
+        "exit_price": exit_price,
+        "pnl": r.pnl,
+        "opened_at": r.opened_at,
+        "closed_at": r.closed_at,
+    }

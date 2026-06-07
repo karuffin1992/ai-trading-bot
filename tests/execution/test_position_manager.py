@@ -47,3 +47,41 @@ def test_close_all_flattens(sf):
     with sf() as s:
         r = s.query(PositionRecord).first()
         assert r.status == "closed" and r.pnl == -3.0
+
+
+class _FakeReflect:
+    def __init__(self):
+        self.calls = []
+
+    def reflect_on_closed(self, positions):
+        self.calls.append(positions)
+        return []
+
+
+def test_reflection_called_on_sync_close(sf):
+    fake = _FakeReflect()
+    pm = PositionManager(sf, reflection_engine=fake)
+    pm.record_open("trade-1", "SPY", "long", 2.0, 500.0, 495.0, 510.0)
+    pm._broker_open_map = lambda: {}
+    pm._last_price = lambda sym: 506.0
+    pm.sync()
+    assert len(fake.calls) == 1
+    assert fake.calls[0][0]["symbol"] == "SPY"
+    assert fake.calls[0][0]["pnl"] == 12.0
+
+
+def test_reflection_not_called_when_absent(sf):
+    pm = _open_position(sf)
+    pm._broker_open_map = lambda: {}
+    pm._last_price = lambda sym: 506.0
+    pm.sync()  # no reflection engine -> no error
+
+
+def test_reflection_called_on_close_all(sf):
+    fake = _FakeReflect()
+    pm = PositionManager(sf, reflection_engine=fake)
+    pm.record_open("trade-2", "SPY", "long", 1.0, 500.0, 495.0, 510.0)
+    pm._flatten = lambda sym: 497.0
+    pm.close_all()
+    assert len(fake.calls) == 1
+    assert fake.calls[0][0]["exit_price"] == 497.0

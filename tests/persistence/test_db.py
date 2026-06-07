@@ -17,6 +17,13 @@ def test_required_tables_exist(engine):
                "pending_trades","kill_switch_state"]:
         assert t in tables, f"Missing table: {t}"
 
+def test_learning_memory_tables_exist(engine):
+    tables = inspect(engine).get_table_names()
+    for t in ["learning_runs","parameter_sets","experiment_history",
+              "memory_episodes","memory_reflections","embedding_registry",
+              "prompt_versions","model_registry"]:
+        assert t in tables, f"Missing table: {t}"
+
 def test_kill_switch_singleton(engine):
     with get_session(engine) as s:
         s.add(KillSwitchRecord(id=1, active=False, reason=""))

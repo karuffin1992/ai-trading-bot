@@ -34,6 +34,18 @@ class Settings(BaseSettings):
     dashboard_refresh_seconds: int = 60
     trade_history_page_size: int = 50
     database_url: str = "sqlite:///data/trading.db"
+    # Self-learning / memory layer. All default OFF: with these unset the
+    # pipeline (and AIAnalyst prompt) behaves exactly as before.
+    memory_enabled: bool = False
+    memory_injection_enabled: bool = False
+    memory_retrieval_k: int = 5
+    memory_token_budget: int = 800
+    embedding_provider: str = "deterministic_hash"
+    embedding_dim: int = 256
+    embedding_version: str = "det-1.0.0"
+    llm_provider: str = "claude"
+    llm_replay_cache_enabled: bool = True
+    reflection_enabled: bool = False
 
     class Config:
         env_file = ".env"
@@ -69,6 +81,27 @@ def _apply_yaml(path: str = "config/settings.yaml") -> None:
         "DASHBOARD_REFRESH_SECONDS": d["dashboard"]["refresh_seconds"],
         "TRADE_HISTORY_PAGE_SIZE": d["dashboard"]["page_size"],
     }
+    # Optional blocks — read with .get() so pre-existing YAML files (without these
+    # sections) still load without KeyError.
+    mem = d.get("memory", {})
+    llm = d.get("llm", {})
+    refl = d.get("reflection", {})
+    optional = {
+        "MODEL_VERSION": d.get("versions", {}).get("model"),
+        "MEMORY_ENABLED": mem.get("enabled"),
+        "MEMORY_INJECTION_ENABLED": mem.get("injection_enabled"),
+        "MEMORY_RETRIEVAL_K": mem.get("retrieval_k"),
+        "MEMORY_TOKEN_BUDGET": mem.get("token_budget"),
+        "EMBEDDING_PROVIDER": mem.get("embedding_provider"),
+        "EMBEDDING_DIM": mem.get("embedding_dim"),
+        "EMBEDDING_VERSION": mem.get("embedding_version"),
+        "LLM_PROVIDER": llm.get("provider"),
+        "LLM_REPLAY_CACHE_ENABLED": llm.get("replay_cache_enabled"),
+        "REFLECTION_ENABLED": refl.get("enabled"),
+    }
+    for k, v in optional.items():
+        if v is not None:
+            flat[k] = v
     for k, v in flat.items():
         os.environ.setdefault(k, str(v))
 

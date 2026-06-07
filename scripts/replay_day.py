@@ -5,6 +5,10 @@ Usage:
   python scripts/replay_day.py --date 2026-05-16
   python scripts/replay_day.py --cycle-id <uuid>
   python scripts/replay_day.py --date 2026-05-16 --mode ai_only
+  python scripts/replay_day.py --date 2026-05-16 --mode memory_only
+
+All AI replay runs route through the LLM gateway in replay_mode=True, so a cache
+miss returns a failure rather than making a live API call (replay safety).
 """
 import argparse
 from sqlalchemy import create_engine
@@ -42,31 +46,65 @@ def replay(cycle: CycleRecord, mode: str) -> None:
     elif mode == "ai_only":
         from app.models.market import FeatureSet
         from app.models.signals import TradeSignal, TradeRejection
-        from app.ai.analyst import AIAnalyst
         fs  = FeatureSet(**cycle.features_json)
         sig_data = cycle.signal_json
         sig = (TradeSignal(**sig_data) if sig_data.get("type") == "SIGNAL"
                else TradeRejection(**sig_data))
-        print(AIAnalyst().analyze(sig, fs).model_dump_json(indent=2))
+        print(_replay_analyst().analyze(sig, fs).model_dump_json(indent=2))
 
     elif mode == "full_pipeline":
         from app.models.market import MarketData
         from app.features.pipeline import FeaturePipeline
         from app.strategies.spy_trend import SpyTrendStrategy
-        from app.ai.analyst import AIAnalyst
         md  = MarketData(**cycle.market_data_json)
         fs  = FeaturePipeline.compute(md)
         sig = SpyTrendStrategy.evaluate(fs)
-        print(AIAnalyst().analyze(sig, fs).model_dump_json(indent=2))
+        print(_replay_analyst().analyze(sig, fs).model_dump_json(indent=2))
+
+    elif mode == "memory_only":
+        from app.models.market import FeatureSet
+        from app.models.signals import TradeSignal, TradeRejection
+        from app.memory.embeddings import make_embedder
+        from app.memory.retrieval import MemoryRetriever, SQLiteVectorStore
+        from app.persistence.db import make_session_factory
+        fs  = FeatureSet(**cycle.features_json)
+        sig_data = cycle.signal_json
+        sig = (TradeSignal(**sig_data) if sig_data.get("type") == "SIGNAL"
+               else TradeRejection(**sig_data))
+        direction = getattr(sig, "direction", "n/a")
+        strategy = getattr(sig, "strategy", "n/a")
+        sf = make_session_factory(create_engine(settings.database_url))
+        embedder = make_embedder(settings.embedding_provider,
+                                 dim=settings.embedding_dim,
+                                 embedding_version=settings.embedding_version)
+        store = SQLiteVectorStore(sf, embedding_version=settings.embedding_version)
+        retriever = MemoryRetriever(embedder, store, session_factory=sf)
+        query = (f"{fs.symbol} regime price={fs.price} rsi={fs.rsi} vix={fs.vix} "
+                 f"{direction} {strategy}")
+        hits = retriever.retrieve(query, k=settings.memory_retrieval_k)
+        if not hits:
+            print("No similar memories found (memory store may be empty).")
+        for h in hits:
+            print(f"[{h.rank}] score={h.score:.4f} outcome={h.outcome} "
+                  f"pnl_pct={h.pnl_pct} :: {h.summary}")
 
     print("\n=== Done ===")
+
+
+# Replay must never make a live API call. The gateway in replay_mode returns a
+# failure on a cache miss instead of hitting the provider.
+def _replay_analyst():
+    from app.ai.analyst import AIAnalyst
+    from app.llm.gateway import LLMGateway
+    return AIAnalyst(gateway=LLMGateway.default(replay_mode=True))
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--date")
     p.add_argument("--cycle-id")
     p.add_argument("--mode", default="full_pipeline",
-                   choices=["full_pipeline","feature_only","strategy_only","ai_only"])
+                   choices=["full_pipeline","feature_only","strategy_only","ai_only",
+                            "memory_only"])
     args = p.parse_args()
 
     engine = create_engine(settings.database_url)
