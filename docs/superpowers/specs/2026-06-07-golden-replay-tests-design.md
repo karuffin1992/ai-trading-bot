@@ -79,11 +79,12 @@ the same Pydantic model the live pipeline uses.
   "signal_hash": "<sha256>",
   "prompt_hash": "<sha256|null>",
   "retrieval_hash": null,
-  "prompt_preview": "<first ~300 chars of assembled prompt, human-readable>",
+  "prompt_preview": "<textwrap.shorten(prompt, width=300, placeholder='...'), human-readable>",
   "versions": {
     "pipeline": "1.0.0",
     "strategy": "1.0.0",
-    "prompt": "1.0.0"
+    "prompt": "1.0.0",
+    "canonical_schema_version": "1.0.0"
   },
   "timing": {
     "features_runtime_ms": 0.0,
@@ -99,7 +100,9 @@ the same Pydantic model the live pipeline uses.
 - `timing` is diagnostic only — NOT hashed, NOT asserted. Captures wall-clock per stage to
   surface accidental perf regressions during `--explain`.
 - `versions` ARE asserted: a version bump without a re-bless is a hard failure, forcing the
-  author to acknowledge the contract changed.
+  author to acknowledge the contract changed. `canonical_schema_version` covers the
+  canonicalizer's own contract (float precision, NaN/Inf encoding, datetime normalization);
+  bumping it when that logic changes flags that every hash was intentionally invalidated.
 
 ## Canonicalization
 
@@ -108,16 +111,22 @@ the same Pydantic model the live pipeline uses.
 1. **Serialize first.** Always operate on `model.model_dump(mode="json")`, never raw object
    attributes. Pydantic's json mode already normalizes datetimes/enums/UUIDs consistently with
    production serialization.
-2. **Numbers:** round every `float` to 6 dp. `NaN` → `"NaN"`, `+Inf` → `"Infinity"`,
-   `-Inf` → `"-Infinity"` (JSON has no native form). Coerce `Decimal` → rounded float.
-   Coerce numpy scalar types (`numpy.floating`, `numpy.integer`, `numpy.bool_`) → native Python
-   primitive before rounding.
+2. **Numbers:** round every `float` to 6 dp via Python built-in `round(value, 6)` (banker's
+   rounding, symmetric for negatives — pinned here so a future switch to `Decimal.quantize` is a
+   conscious `canonical_schema_version` bump, not a silent drift). `NaN` → `"NaN"`,
+   `+Inf` → `"Infinity"`, `-Inf` → `"-Infinity"` (JSON has no native form). Coerce
+   `Decimal` → rounded float. Coerce numpy scalar types (`numpy.floating`, `numpy.integer`,
+   `numpy.bool_`) → native Python primitive before rounding.
 3. **datetime:** ISO-8601 string (already handled by `mode="json"`; the canonicalizer also
    guards any stray `datetime` defensively).
-4. **Ordering:** dicts → keys sorted recursively. Lists → order preserved exactly (order is
+4. **Strings:** normalize newlines `\r\n` → `\n` (and bare `\r` → `\n`) on every string before
+   serialization, so Windows vs Unix line endings cannot poison hashes — critical for prompt
+   hashing cross-platform.
+5. **Ordering:** dicts → keys sorted recursively. Lists → order preserved exactly (order is
    semantically meaningful, e.g. OHLC bar sequence).
-5. **Dump:** `json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`.
-6. **Hash:** `hashlib.sha256(s.encode()).hexdigest()`.
+6. **Dump:** `json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`.
+7. **Hash:** `hashlib.sha256(s.encode("utf-8")).hexdigest()` — explicit UTF-8, never platform
+   default.
 
 The same `canonicalize` feeds both the hash and the `--explain` snapshots, so what you inspect
 is exactly what gets hashed.
@@ -147,7 +156,8 @@ is exactly what gets hashed.
 4. if `result` is a `TradeSignal`:
    `ctx = analyst.build_prompt_context(signal, features, account_balance=100.0)`
    `prompt = analyst.build_prompt(ctx)`
-   `prompt_hash = sha(canonicalize(prompt))`, `prompt_preview = prompt[:300]`
+   `prompt_hash = sha(canonicalize(prompt))`,
+   `prompt_preview = textwrap.shorten(prompt, width=300, placeholder="...")`
    else `prompt_hash = None`, `prompt_preview = None`.
 
 No `AIAnalyst` LLM client is constructed — only the pure prompt-building methods are called.
